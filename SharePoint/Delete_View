@@ -1,0 +1,7 @@
+.".\SPLib.ps1"
+
+$SiteUrl = "http://TODO:81/"
+
+$context = Connect $SiteUrl
+
+Delete-View -context $context -listName "AITHMATA" -viewName "TODO"
