@@ -1,0 +1,2 @@
+# How to find the Version, Culture and PublicKeyToken of an Assembly (DLL)
+([system.reflection.assembly]::loadfile("C:\KL\PNPDemandsER\PNPDemandsER\bin\Release\PNPDemandsER.dll")).FullName
