@@ -1,0 +1,12 @@
+Add-PSSnapin Microsoft.Sharepoint.Powershell
+# https://blogs.msdn.microsoft.com/sharepoint_bar__grill/2011/04/09/delete-orphaned-event-handler-through-powershell/
+
+#$var = Get-SPSite -limit All | Get-SPWeb -limit all | % {$_.EventReceivers} | where {$_.Assembly -eq “ER2, Version=1.0.0.0, Culture=neutral, PublicKeyToken=15a1b6f432ed1164”}
+#$var = Get-SPSite -limit All | Get-SPWeb -limit all | % {$_.EventReceivers} | where {$_.Assembly -eq “ERdeletion, Version=1.0.0.0, Culture=neutral, PublicKeyToken=2f1528126ad6ddf5”}
+#write $var
+#$var | % {$_.Delete()}
+
+# http://sharepoint.stackexchange.com/questions/16525/how-to-remove-orphaned-features
+# Get-SPFeature | ? { $_.Scope -eq $null }
+
+
