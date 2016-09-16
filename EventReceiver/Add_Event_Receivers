@@ -1,0 +1,15 @@
+# https://naimmurati.wordpress.com/2012/03/22/add-modify-or-delete-list-event-receivers-with-powershell/
+
+Add-PSSnapin Microsoft.SharePoint.PowerShell –erroraction SilentlyContinue
+ 
+$web = Get-SPWeb -Identity https://TODO/TODO/TODO/
+$list = $web.GetList($web.Url + "/Lists/timologia")
+ 
+$type = "ItemDeleting" #or any other type, like ItemDeleting, ItemAdded, ItemUpdating ...
+$assembly = "ER, Version=1.0.0.0, Culture=neutral, PublicKeyToken=9a13684c2c83a84a"
+$class = "ER.CodeGenER.CodeGenER"
+ 
+$list.EventReceivers.Add($type, $assembly, $class)
+Write-Host "Event receiver" $assembly "with type" $type "added"
+ 
+$web.Dispose()
