@@ -1,0 +1,23 @@
+if ((Get-PSSnapin "Microsoft.SharePoint.PowerShell" -ErrorAction SilentlyContinue) -eq $null) {
+    Add-PSSnapin "Microsoft.SharePoint.PowerShell"
+}
+$web = Get-SPWeb -identity "http://TODO:81/"
+$list = $web.Lists["users"]
+
+$listitems = $list.Items.Count;
+if ($listitems -lt 1) {
+     break;
+} else {
+	
+    Write-Host "Updating ..."
+
+	foreach ($item in $list.Items)
+	{
+        $item["IPRights"] = $item["pnpdemands"];
+		$item.Update();
+	}
+}
+
+Write-Host "End of process"
+
+$web.Dispose();
