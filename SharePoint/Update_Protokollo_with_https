@@ -1,0 +1,34 @@
+if ((Get-PSSnapin "Microsoft.SharePoint.PowerShell" -ErrorAction SilentlyContinue) -eq $null) {
+    Add-PSSnapin "Microsoft.SharePoint.PowerShell"
+}
+
+Write-Host "Start of process"
+
+$web = Get-SPWeb -identity "http://TODO:81"
+$list = $web.Lists["Πρωτόκολλο ΕΕΤΣ"] #protokoloPNPdemands
+
+$listItems = $list.Items.Count;
+Write-Host "Items: " $listItems
+
+foreach ($item in $list.Items)
+{
+   Write-Host "Before: " $item["pnpdemand"]
+   
+   $hasHTTPS = $item["pnpdemand"].StartsWith('"https')
+   if ($hasHTTPS) {
+     Write-Host -ForeGround 'Red' "Https found, no change"
+     continue;
+   }
+
+   $hasHTTP = $item["pnpdemand"].StartsWith('"http')
+   if ($hasHTTP)
+   {
+     $item["pnpdemand"] = $item["pnpdemand"].Replace("http", "https");
+     $item.Update();
+   }
+
+   Write-Host "After: " $item["pnpdemand"]
+}
+
+Write-Host "End of process"
+$web.Dispose();
