@@ -1,0 +1,33 @@
+.".\SPLib.ps1"
+
+$SiteUrl = "http://TODO/TODO/TODO/"
+
+$ListName = "AITHMATA"
+$ViewTitle = "DTMEALL"
+
+$context = Connect $SiteUrl
+
+# column SRM does not exist #
+
+Add-View -context $context -listName $ListName -viewTitle $ViewTitle `
+            -viewQuery '<Where><Eq><FieldRef Name="MonadaDiaxeirisis" /><Value Type="Text">Διεύθυνση Τραπεζικής Μικρών Επιχειρήσεων</Value></Eq></Where>' `
+            -viewFields "Created;ID;Status Υποβολής;CDI Πελάτη;Πελάτης/Εντολέας;Είδος Εντολέα;ΑΦΜ;Μονάδα Διαχείρισης;Είδος Συναλλαγής;Χώρα Προορισμού Κεφαλαίων;Νόμισμα;Ισότιμο σε ΕΥΡΩ;Κατηγορία Προϊόντος;Αιτιολογία Συναλλαγής;Ημερομηνία Απόφασης ΕΕΤΣ;Ημερομηνία λήψης απόφασης ΕΕΤΣ;Αριθμός Πρωτ. Αποφάσεως ΕΕΤΣ;Σχόλιο Αποφ. ΕΕΤΣ;Ημερομηνία Εγκρίσεως ΥΕΤΣ;Αρ. Πρωτ. Εγκρίσεως ΥΕΤΣ;Σχόλιο Έγκρ. ΥΕΤΣ;Ημερομηνία Αποστολής Εγκρίσεως ΕΕΤΣ/ΥΕΤΣ;Ημ/νία Εκκαθ. Συν/γής;Ποσό Εκκαθάρισης Συναλλαγής;Ποσό Εκκαθ. Συναλλαγής ΕΥΡΩ;status ΜΟΝΑΔΑΣ ΔΙΑΧΕΙΡΙΣΗΣ;status ΔΠΧΠ;App Created By;Ημερομηνία Λήξης Τιμολογίου;Ημερομηνία υποβολής αιτήματος από τον Πελάτη;Κωδικός Αιτήματος;Κωδικός Καταστήματος;Όρος Πληρωμής;Ποσό Παραστατικού;Σχόλια Πληρωμής;Μέγιστη Μηνιαία Αξία Μεταφορών Κεφαλαίου στο Εξωτερικό;Συνολική Αξία Συναλλαγών για τον τρέχοντα μήνα;Συνολική Ετήσια Αξία" `
+
+                                    
+# Refresh $context with new view
+$context = Connect $SiteUrl
+
+# show all items without folders
+$view = Get-View -context $context $ListName $ViewTitle
+if ($view -ne $null) {
+    Write-Host "Updating scope..."
+    $view.Scope = "Recursive"
+    $view.Update()
+    $context.ExecuteQuery()
+
+    # Refresh $context with new view
+    $context = Connect $SiteUrl
+}
+
+
+
