@@ -1,0 +1,48 @@
+param([string]$AitimaCode)
+#20150915-108-090159109-0006229867-EUR-01
+
+if ((Get-PSSnapin "Microsoft.SharePoint.PowerShell" -ErrorAction SilentlyContinue) -eq $null) {
+    Add-PSSnapin "Microsoft.SharePoint.PowerShell"
+}
+
+Write-Host "Starting Version history process ..."
+
+$ReportFile = "C:\Users\spdms_farm\Documents\PowerShell\Aitima_VersionHistory.csv"
+#delete file if exists
+If (Test-Path $ReportFile)
+{
+    Remove-Item $ReportFile
+}
+
+$web = Get-SPWeb -identity "http://TODO:81/"
+$list = $web.Lists["AITHMATA"]
+
+#Get all list items
+$ItemsColl = $list.Items | Where-Object {$_["KodikosAitimatos"] -eq $AitimaCode}
+
+Write-Host "Items: " $ItemsColl.Count;
+
+#Write Report Header
+#Write-Host "Item ID, Version Label, Created by, Created at, Title, CDI Πελάτη, Status Ypovolis, status ΜΟΝΑΔΑΣ ΔΙΑΧΕΙΡΙΣΗΣ, status ΔΠΧΠ, Σχόλιο Συναλλαγής"
+Add-Content -Path $ReportFile -Value "Item ID, Version Label, Created by, Created at, Κωδικός Αιτήματος, Πελάτης, Κωδικός Καταστήματος, Μονάδα Διαχείρισης"
+
+#Loop through each item
+foreach ($item in $ItemsColl)
+{
+    $versions = $item.Versions | Sort-Object -Property {$_["CreatedBy"]}
+
+    #Iterate each version
+    foreach($version in $versions)
+    {
+       #Get the version content
+       #$VersionData = "$($item.id), $($version.VersionLabel), $($version.CreatedBy.User.DisplayName), $($version.Created), $($version['KodikosAitimatos']), $($version['ClientName']), $($version['_x039a__x03c9__x03b4__x03b9__x03']), $($version['MonadaDiaxeirisis'])"
+       #Write to report
+       #Add-Content -Path $ReportFile -Value $VersionData
+        
+       Write-Host "$($item.id), $($version.VersionLabel), $($version.CreatedBy.User.DisplayName), $($version.Created), $($version['KodikosAitimatos']), $($version['ClientName']), $($version['_x039a__x03c9__x03b4__x03b9__x03']), $($version['MonadaDiaxeirisis'])"
+    }
+}
+
+Write-Host "Version history has been exported successfully!"
+
+
