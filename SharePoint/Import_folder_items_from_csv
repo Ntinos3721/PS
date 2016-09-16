@@ -1,0 +1,69 @@
+if ((Get-PSSnapin "Microsoft.SharePoint.PowerShell" -ErrorAction SilentlyContinue) -eq $null) {
+    Add-PSSnapin "Microsoft.SharePoint.PowerShell"
+}
+
+#https://blogs.technet.microsoft.com/stuffstevesays/2013/06/06/populating-a-sharepoint-list-using-powershell/
+#Open SharePoint List 
+
+$InvFile="c:\temp\folder-items.csv"
+$destinationFolderName = "283-ΣΠΑΤΩΝ"
+
+$web = Get-SPWeb -identity "http://TODO:81/"
+$list = $web.Lists["AITHMATA"]
+
+#$spData = $spWeb.GetList($list) 
+
+#$query = New-Object Microsoft.SharePoint.SPQuery
+#$query.Folder = $list.RootFolder.SubFolders[$destinationFolderName]
+#$spData = $list.GetItems($query)
+
+
+$FileExists = (Test-Path $InvFile -PathType Leaf) 
+if ($FileExists) { 
+   "Loading $InvFile for processing…" 
+   $tblData = Import-CSV $InvFile 
+} else { 
+   "$InvFile not found – stopping import!" 
+   exit 
+} 
+
+# Loop through Applications add each one to SharePoint 
+"Uploading data to SharePoint…." 
+
+# Get handle on the subfolder
+$subFolder = $list.RootFolder.SubFolders[$destinationFolderName]
+Write-Host "sub folder" $subFolder
+
+
+foreach ($row in $tblData) 
+{ 
+   "Adding entry for "+$row."ID".ToString() 
+   #$spItem = $spData.AddItem()
+   $spItem = $list.AddItem($subFolder.ServerRelativeUrl, 0, $null) # 0 means normal list item
+
+   if ($row."Title".ToString() -eq "Αίτημα Συναλλαγής")
+   {
+       $spItem["Title"] = $row."Title".ToString() 
+       $spItem["Κωδικός Αιτήματος"] = $row."Code".ToString() 
+       $spItem["status ΜΟΝΑΔΑΣ ΔΙΑΧΕΙΡΙΣΗΣ"] = $row."StatusMD".ToString() 
+       $spItem["Μονάδα Διαχείρισης"] = $row."MD".ToString()
+       $spItem["Status Υποβολής"] = $row."StatusYpovolis".ToString() 
+   }
+   else
+   {
+       $spItem["Title"] = $row."Title".ToString() 
+       $spItem["Κωδικός Αιτήματος πελάτη (ΛΣ)"] = $row."Code".ToString() 
+       $spItem["Status Μονάδας Διαχείρισης (ΛΣ)"] = $row."StatusMD".ToString() 
+       $spItem["Μονάδα Διαχείρισης Σχέσης (ΛΣ)"] = $row."MD".ToString()
+       $spItem["Status Υποβολής (ΛΣ)"] = $row."StatusYpovolis".ToString() 
+   }
+      
+
+   $spItem.Update() 
+} 
+
+
+"—————" 
+"Upload Complete" 
+
+$spWeb.Dispose()
