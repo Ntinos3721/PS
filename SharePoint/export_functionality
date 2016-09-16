@@ -1,0 +1,94 @@
+cls
+
+$mydate = Get-Date
+write-host "Starting AEIS:" $mydate.ToShortDateString()  $mydate.ToShortTimeString()
+
+Add-PSSnapin Microsoft.Sharepoint.Powershell
+$splList =(Get-Spweb "http://TODO:81/").GetList("http://TODO:81/Lists/timologia")
+
+$spqQuery = New-Object Microsoft.SharePoint.SPQuery 
+$spqQuery.Query = @"
+<Where>
+    <And>
+       <And> 
+            <And>
+                <Eq>
+                    <FieldRef Name='Title'/>
+                    <Value Type='Text'>Αίτημα Συναλλαγής</Value>
+                </Eq>
+                <Neq>
+                    <FieldRef Name='epitropi'/>
+                    <Value Type='Text'>NA</Value>
+                </Neq>
+            </And>
+            <Contains>
+                <FieldRef Name="status_x0020__x0394__x03a0__x03a" />
+                <Value Type='Text'>ΕΓΚΕΚΡΙΜΕΝΟ</Value>
+            </Contains>
+       </And>
+       <Or>
+            <Eq>
+                <FieldRef Name='EgkrisiYETSDate' />
+                <Value Type='DateTime'><Today /></Value>
+            </Eq>
+            <Eq>
+                <FieldRef Name='LipsiApofasisEETSDate' />
+                <Value Type='DateTime'><Today /></Value>
+            </Eq>
+       </Or>     
+    </And>
+</Where>
+<OrderBy>
+    <FieldRef Name='KwdikosAEIS' />
+</OrderBy>
+"@
+$spqQuery.ViewAttributes = "Scope='RecursiveAll'"
+$splListItems = $splList.GetItems($spqQuery) 
+#echo $splListItems
+#$exportlist = @()
+$sp=";"
+$a = Get-Date
+$filenam="export_"+$a.Year + "_" + $a.Month+"_"+$a.Day +"__"+$a.Hour+"."+$a.Minute+"."+$a.Second+".csv"
+$filenam="D:\AEIS\"+$filenam
+New-Item $filenam -type file
+#$stringBuilder = New-Object System.Text.StringBuilder
+foreach ($item in $splListItems)
+{
+    #write-host "ID:" $item.ID "ΚωδικόςΑΕΙΣ: " $item["ΚωδικόςΑΕΙΣ"]  "CDI Πελάτη:" $item["CDI Πελάτη"] "ΑΦΜ:" $item["ΑΦΜ"]
+    #write-host "Νόμισμα" $item["Νόμισμα"] "Ποσό Παραστατικού" $item["Ποσό Παραστατικού"] "epitropi" $item["epitropi"]
+    #write-host "Ημερομηνία Εγκρίσεως ΥΕΤΣ:" $item["Ημερομηνία Εγκρίσεως ΥΕΤΣ"] "Ημερομηνία Απόφασης ΕΕΤΣ:" $item["Ημερομηνία Απόφασης ΕΕΤΣ"]
+    #write-host "-------------"
+   	#$obj = New-Object PSObject -Property @{
+         #"ΚωδικόςΑΕΙΣ"= $item["ΚωδικόςΑΕΙΣ"] 
+         #"CDI Πελάτη" = $item["CDI Πελάτη"]
+         #"ΑΦΜ"= $item["ΑΦΜ"]
+         #"Νόμισμα"= $item["Νόμισμα"]
+         #"Ποσό Παραστατικού"= $item["Ποσό Παραστατικού"] 
+         #"EE.YY"= $item["epitropi"]						
+	#}
+	#$exportlist += $obj
+    $line=$item["ΚωδικόςΑΕΙΣ"]+$sp+$item["ΑΦΜ"]+$sp+$item["Νόμισμα"]+$sp+$item["Ποσό Παραστατικού"]+$sp+$item["epitropi"]
+    #write-host $line  $item["status ΔΠΧΠ"] 
+    #write-host $line $item["status ΔΠΧΠ"] $item["EgkrisiYETSDate"] $item["LipsiApofasisEETSDate"] 
+    $line | Out-File $filenam -Append
+} 
+#$exportlist | select * | Export-Csv -Encoding:UTF8 -path 'D:\Safedeposits\pnpdemands\export.csv' -noType
+
+
+$EmailTo = "TODO"
+$EmailFrom = "TODO"
+$Subject = "PNP Demands Export" 
+$Body = "Attached is the PNPDemands CSV" 
+$SMTPServer = "TODO"
+$SMTPMessage = New-Object System.Net.Mail.MailMessage($EmailFrom,$EmailTo,$Subject,$Body)
+$attachment = New-Object System.Net.Mail.Attachment($filenam)
+$SMTPMessage.Attachments.Add($attachment)
+$SMTPClient = New-Object Net.Mail.SmtpClient($SMTPServer, 587) 
+$SMTPClient.EnableSsl = $true 
+$SMTPClient.Credentials = New-Object System.Net.NetworkCredential("TODO", "TODO"); 
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = { return $true }
+$SMTPClient.Send($SMTPMessage)
+$attachment.Dispose()
+
+$mydate = Get-Date
+write-host "Completed AEIS:" $mydate.ToShortDateString()  $mydate.ToShortTimeString()
