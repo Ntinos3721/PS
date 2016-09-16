@@ -1,0 +1,25 @@
+$list = (Get-Spweb "http://TODO:81").GetList("http://TODO:81/Lists/timologia/")
+echo "Η διαδικασία ενημέρωσης ξεκίνησε...";
+
+$items = $list.items | Where-Object {($_["Title"] -eq "Αίτημα Συναλλαγής" -and $_["sent2"] -eq $null) -or ($_["Title"] -eq "Αίτημα Λοιπών Συναλλαγών" -and $_["sent2LS"] -eq $null)}
+$i=0;
+$j=0;
+
+foreach($item in $items)
+{
+  if($item["Title"] -eq "Αίτημα Συναλλαγής")
+    {
+      $i++;
+      $item["sent2"] = "True"
+      $item.Update()
+    }
+  ElseIf($item["Title"] -eq "Αίτημα Λοιπών Συναλλαγών")             
+  {
+      $j++;
+      $item["sent2LS"] = "True"   
+      $item.Update()
+    }
+}
+
+echo "$i Εγγραφές Αίτημα Συναλλαγής ενημερώθηκαν";
+echo "$J Εγγραφές Αίτημα Λοιπών Συναλλαγών ενημερώθηκαν";
