@@ -1,0 +1,31 @@
+.".\SPLib.ps1"
+
+$SiteUrl = "http://TODO:81/"
+
+$context = Connect $SiteUrl
+
+# column SRM does not exist #
+
+Add-View -context $context -listName "AITHMATA" -viewTitle "TODO" `
+            -viewQuery '<GroupBy><FieldRef Name="_x039a__x03c9__x03b4__x03b9__x03" /></GroupBy><OrderBy><FieldRef Name="Created" Ascending="False" /></OrderBy><Where><Neq><FieldRef Name="Title" /><Value Type="Text">Αίτημα Συναλλαγής</Value></Neq></Where>' `
+            -viewFields "Created;ID;Status Υποβολής;CDI Πελάτη;Πελάτης/Εντολέας;Είδος Εντολέα;ΑΦΜ;Μονάδα Διαχείρισης;Είδος Συναλλαγής;Χώρα Προορισμού Κεφαλαίων;Νόμισμα;Ισότιμο σε ΕΥΡΩ;Κατηγορία Προϊόντος;Αιτιολογία Συναλλαγής;Ημερομηνία Απόφασης ΕΕΤΣ;Ημερομηνία λήψης απόφασης ΕΕΤΣ;Αριθμός Πρωτ. Αποφάσεως ΕΕΤΣ;Σχόλιο Αποφ. ΕΕΤΣ;Ημερομηνία Εγκρίσεως ΥΕΤΣ;Αρ. Πρωτ. Εγκρίσεως ΥΕΤΣ;Σχόλιο Έγκρ. ΥΕΤΣ;Ημερομηνία Αποστολής Εγκρίσεως ΕΕΤΣ/ΥΕΤΣ;Ημ/νία Εκκαθ. Συν/γής;Ποσό Εκκαθάρισης Συναλλαγής;Ποσό Εκκαθ. Συναλλαγής ΕΥΡΩ;status ΜΟΝΑΔΑΣ ΔΙΑΧΕΙΡΙΣΗΣ;status ΔΠΧΠ;App Created By;Ημερομηνία Λήξης Τιμολογίου;Ημερομηνία υποβολής αιτήματος από τον Πελάτη;Κωδικός Αιτήματος;Κωδικός Καταστήματος;Όρος Πληρωμής;Ποσό Παραστατικού;Σχόλια Πληρωμής;Μέγιστη Μηνιαία Αξία Μεταφορών Κεφαλαίου στο Εξωτερικό;Συνολική Αξία Συναλλαγών για τον τρέχοντα μήνα;Συνολική Ετήσια Αξία" `
+            -aggregations '<FieldRef Name="ParastatikoPoso" Type="SUM" />'
+
+                                    
+# Refresh $context with new view
+$context = Connect $SiteUrl
+
+# show all items without folders
+$view = Get-View -context $context "AITHMATA" "TODO"
+if ($view -ne $null) {
+    Write-Host "Updating scope..."
+    $view.Scope = "Recursive"
+    $view.Update()
+    $context.ExecuteQuery()
+
+    # Refresh $context with new view
+    $context = Connect $SiteUrl
+}
+
+
+
