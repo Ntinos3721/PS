@@ -1,3 +1,59 @@
+https://onedrive.live.com/embed?cid=CD1B52206B5F7C0D&resid=CD1B52206B5F7C0D%2167949&authkey=AKysRNSLpAc7QjQ
+
+Συνολικά οι εντολές του PowerShell script είναι:
+
+o   General
+  Connect
+Συνδέεται σε ένα site και επιστρέφει το αντίστοιχο context session αντικείμενο (απαραίτητο για τις υπόλοιπες εντολές)
+o   Lists
+  Get-List
+Αναζητά λίστα με το όνομά της και επιστρέφει ένα αντικείμενο List (αν υπάρχει η λίστα με το αντίστοιχο όνομα)
+  Add-List
+Προσθέτει μια νέα λίστα στο site δίνοντας βασικές πληροφορίες όπως: όνομα λίστας, url, περιγραφή, τύπος
+  Add-ListWithSchemaXml
+Προσθέτει μια νέα λίστα στο site χρησιμοποιώντας το παρεχόμενο σχήμα (schema.xml)
+  Recycle-List
+Διαγράφει μια λίστα και τη μεταφέρει στο recycle bin
+  Enable-ListContentTypes
+Ενεργοποιεί τα content types σε μια 
+o   Fields
+  Get-Field
+Αναζητά ένα πεδίο με το όνομά του και επιστρέφει ένα αντικείμενο Field (αν υπάρχει το πεδίο με το αντίστοιχο όνομα)
+  Add-FieldWithSchemaXml
+Προσθέτει ένα νέο πεδίο στο site χρησιμοποιώντας το παρεχόμενο σχήμα (schema.xml). Οι εντολές Add-Field* χρησιμοποιούν αυτήν την εντολή
+  Add-FieldText
+Προσθέτει ένα νέο πεδίο τύπου Text στο site 
+  Add-FieldNote
+Προσθέτει ένα νέο πεδίο τύπου Note (rich text) στο site
+  Add-FieldDateTime
+Προσθέτει ένα νέο πεδίο τύπου DateTime στο site
+  Add-FieldNumber
+Προσθέτει ένα νέο πεδίο τύπου Number στο site
+  Add-FieldBoolean
+Προσθέτει ένα νέο πεδίο τύπου Boolean στο site
+  Add-FieldChoice
+Προσθέτει ένα νέο πεδίο τύπου Choice στο site
+  Add-FieldUser
+Προσθέτει ένα νέο πεδίο τύπου User στο site
+  Add-FieldLookup
+Προσθέτει ένα νέο πεδίο τύπου Lookup στο site
+o   Content Types
+  Get-ContentType
+Αναζητά ένα content type με το όνομά του και επιστρέφει ένα αντικείμενο ContentType (αν υπάρχει το CT με το αντίστοιχο όνομα)
+  Get-ListContentType
+Αναζητά ένα content type σε μια λίστα με το όνομά του και επιστρέφει ένα αντικείμενο ContentType (αν υπάρχει το CT με το αντίστοιχο όνομα)
+  Add-ContentType
+Προσθέτει ένα νέο content type
+  Add-ContentTypeToList
+Προσθέτει ένα υπάρχον content type σε μια λίστα
+  Get-ContentTypeFieldLink
+Αναζητά ένα πεδίο με το Id του σε content type και επιστρέφει ένα αντικείμενο FieldLink (αν υπάρχει το πεδίο με το αντίστοιχο Id)
+  Add-FieldToContentType
+Προσθέτει ένα υπάρχον πεδίο σε ένα content type
+
+
+
+
 #########################################################################################
 #    Version 0.0.1
 #    Reference:
