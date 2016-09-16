@@ -1,0 +1,22 @@
+if ((Get-PSSnapin "Microsoft.SharePoint.PowerShell" -ErrorAction SilentlyContinue) -eq $null) {
+    Add-PSSnapin "Microsoft.SharePoint.PowerShell"
+}
+
+Write-Host "Start of process"
+
+$list = (Get-Spweb "http://TODO:81/").GetList("http://TODO:81/Lists/timologia")
+
+$listItems = $list.Items.Count;
+Write-Host "Items: " $listItems
+
+foreach ($item in $list.Items)
+{
+   Write-Host "Before: " $item["mdComments"] #Σχόλιο Εισήγησης
+   
+   $item["mdComments"] = $item["mdComments"] + ",test sxolio";
+   $item.Update();
+
+   Write-Host "After: " $item["mdComments"]
+}
+
+Write-Host "End of process"
