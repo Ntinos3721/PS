@@ -1,0 +1,121 @@
+if ((Get-PSSnapin "Microsoft.SharePoint.PowerShell" -ErrorAction SilentlyContinue) -eq $null) {
+    Add-PSSnapin "Microsoft.SharePoint.PowerShell"
+}
+
+$web = Get-SPWeb -identity "http://TODO:81/"
+$list = $web.Lists["AITHMATA"]
+$folderName = "284-ΩΡΩΠΟΥ"
+
+$fileNameStamp = Get-Date -UFormat "%Y_%m_%d_%H_%M"
+$fileAndPath ="c:\temp\folder-items.csv"
+
+# BEGIN: Export folder items in the list to CSV
+$query = New-Object Microsoft.SharePoint.SPQuery
+$query.Folder = $list.RootFolder.SubFolders[$folderName]
+$folderItems = $list.GetItems($query)
+
+$folderItemsCounter = $folderItems.Count;
+Write-Host "Folder Items:" $folderItemsCounter
+
+# Break out if the list has no content. Stops the creation of empty files.
+
+#Array to Hold Result – PSObjects
+$ListItemCollection = @() 
+#Get folder items"
+$folderItems | foreach {
+     $ExportItem = New-Object PSObject
+
+        if ($_["Title"] -eq "Αίτημα Συναλλαγής")
+        {
+            $ExportItem | Add-Member -MemberType NoteProperty -name "ID" -value $_["ID"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "Title" -value $_["Title"]
+	        $ExportItem | Add-Member -MemberType NoteProperty -name "Code" -value $_["Κωδικός Αιτήματος"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "StatusMD" -value $_["status ΜΟΝΑΔΑΣ ΔΙΑΧΕΙΡΙΣΗΣ"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "MD" -value $_["Μονάδα Διαχείρισης"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "StatusYpovolis" -value $_["Status Υποβολής"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "StatusDPXP" -value $_["status ΔΠΧΠ"]
+	        $ExportItem | Add-Member -MemberType NoteProperty -name "CDI" -value $_["CDI Πελάτη"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "Pelatis" -value $_["Πελάτης/Εντολέας"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "EidosEntolea" -value $_["Είδος Εντολέα"]
+	        $ExportItem | Add-Member -MemberType NoteProperty -name "AFM" -value $_["ΑΦΜ"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "EidosSynallagis" -value $_["Είδος Συναλλαγής"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "Dikaiouxos" -value $_["Δικαιούχος Εντολής"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "Xwra" -value $_["Χώρα Προορισμού Κεφαλαίων"]
+	        $ExportItem | Add-Member -MemberType NoteProperty -name "Nomisma" -value $_["Νόμισμα"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "IsotimoEuro" -value $_["Ισότιμο σε ΕΥΡΩ"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "AitSynallagis" -value $_["Αιτιολογία Συναλλαγής"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerParastatikou" -value $_["Ημερομηνία Παραστατικού"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerParadosis" -value $_["Ημερομηνία Παράδοσης Προϊόντος"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "ArParastatikou" -value $_["Αριθμός Παραστατικού"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerLixisTimologiou" -value $_["Ημερομηνία Λήξης Τιμολογίου"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerYpovolisAitimatos" -value $_["Ημερομηνία υποβολής αιτήματος από τον Πελάτη"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "KatProiontos" -value $_["Κατηγορία Προϊόντος"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "MegistiMinieaAxiaMetaforon" -value $_["Μέγιστη Μηνιαία Αξία Μεταφορών Κεφαλαίου στο Εξωτερικό"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "Orio" -value $_["Όριο"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "SynolikiEtisiaAxia" -value $_["Συνολική Ετήσια Αξία"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "EisigitisA" -value $_["Εισηγητής Α"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "EisigitisB" -value $_["Εισηγητής Β"]
+	        $ExportItem | Add-Member -MemberType NoteProperty -name "PosoParastatikou" -value $_["Ποσό Παραστατικού"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "KwdikosKatastimatos" -value $_["Κωδικός Καταστήματος"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerEgrisewsYETS" -value $_["Ημερομηνία Εγκρίσεως ΥΕΤΣ"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "ArProtEgrisewsYETS" -value $_["Αρ. Πρωτ. Εγκρίσεως ΥΕΤΣ"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerEgrisewsYETSEETS" -value $_["Ημερομηνία Αποστολής Εγκρίσεως ΕΕΤΣ/ΥΕΤΣ"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerApofasisEETS" -value $_["Ημερομηνία Απόφασης ΕΕΤΣ"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerLipsisApofasisEETS" -value $_["Ημερομηνία λήψης απόφασης ΕΕΤΣ"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "Created" -value $_["Created"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "CreatedBy" -value $_["Created By"] 
+	        $ExportItem | Add-Member -MemberType NoteProperty -name "Modified" -value $_["Modified"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "ModifiedBy" -value $_["Modified By"] 
+        }
+        else
+        {
+            $ExportItem | Add-Member -MemberType NoteProperty -name "ID" -value $_["ID"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "Title" -value $_["Title"]
+	        $ExportItem | Add-Member -MemberType NoteProperty -name "Code" -value $_["Κωδικός Αιτήματος πελάτη (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "StatusMD" -value $_["Status Μονάδας Διαχείρισης (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "MD" -value $_["Μονάδα Διαχείρισης Σχέσης (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "StatusYpovolis" -value $_["Status Υποβολής (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "StatusDPXP" -value $_["Status ΔΠΧΠ (ΛΣ)"]
+	        $ExportItem | Add-Member -MemberType NoteProperty -name "CDI" -value $_["CDI (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "Pelatis" -value $_["Πελάτης-Εντολέας (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "EidosEntolea" -value $_["Είδος Πελάτη/Εντολέα (ΛΣ)"]
+	        $ExportItem | Add-Member -MemberType NoteProperty -name "AFM" -value $_["ΑΦΜ Πελάτη (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "EidosSynallagis" -value $_["Είδος Συναλλαγής (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "Dikaiouxos" -value $_["Δικαιούχος (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "Xwra" -value $_["Χώρα προορισμού κεφαλαίων (ΛΣ)"]
+	        $ExportItem | Add-Member -MemberType NoteProperty -name "Nomisma" -value $_["Νόμισμα Τιμολογίου/ Παραστατικού (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "IsotimoEuro" -value $_["Ισότιμο σε EUR (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "AitSynallagis" -value $_["Αιτιολογία Συναλλαγής"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerParastatikou" -value null
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerParadosis" -value null
+            $ExportItem | Add-Member -MemberType NoteProperty -name "ArParastatikou" -value null
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerLixisTimologiou" -value null
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerYpovolisAitimatos" -value $_["Ημ/νία υποβολής αιτήματος από τον Πελάτη (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "KatProiontos" -value $_["Κατηγορία προϊόντος (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "MegistiMinieaAxiaMetaforon" -value null
+            $ExportItem | Add-Member -MemberType NoteProperty -name "Orio" -value null
+            $ExportItem | Add-Member -MemberType NoteProperty -name "SynolikiEtisiaAxia" -value null
+            $ExportItem | Add-Member -MemberType NoteProperty -name "EisigitisA" -value $_["Εισηγητής Α (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "EisigitisB" -value $_["Εισηγητής Β (ΛΣ)"]
+	        $ExportItem | Add-Member -MemberType NoteProperty -name "PosoParastatikou" -value $_["Ποσό Παραστατικού πελάτη (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "KwdikosKatastimatos" -value $_["Κωδικός Καταστήματος-Δ/νσης (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerEgrisewsYETS" -value $_["Ημ/νία Εγκρίσεως ΥΕΤΣ (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "ArProtEgrisewsYETS" -value $_["Αρ.Πρωτ. Εγκρίσεως ΥΕΤΣ (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerEgrisewsYETSEETS" -value $_["Ημερομηνία αποστολής για τη λήψη έγκρισης (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerApofasisEETS" -value $_["Ημ/νία Απόφασης ΕΕΤΣ (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "HmerLipsisApofasisEETS" -value $_["Ημ/νία λήψης απόφασης ΕΕΤΣ (ΛΣ)"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "Created" -value $_["Created"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "CreatedBy" -value $_["Created By"] 
+	        $ExportItem | Add-Member -MemberType NoteProperty -name "Modified" -value $_["Modified"]
+            $ExportItem | Add-Member -MemberType NoteProperty -name "ModifiedBy" -value $_["Modified By"] 
+        }
+		
+    #Add the object with property to an Array
+    $ListItemCollection += $ExportItem
+    }
+
+    #Export the result Array to CSV file
+    $ListItemCollection | Export-CSV $fileAndPath -NoTypeInformation -encoding "unicode"
+
+# END: Export current items in the list to CSV
+$web.Dispose()
