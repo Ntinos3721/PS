@@ -1,0 +1,1547 @@
+#########################################################################################
+#    Version 0.0.1
+#    Reference:
+#    https://msdn.microsoft.com/en-us/library/office/microsoft.sharepoint.client.aspx
+#########################################################################################
+
+
+#Add references to SharePoint client assemblies
+Add-Type -Path "C:\Program Files\Common Files\Microsoft Shared\Web Server Extensions\15\ISAPI\Microsoft.SharePoint.Client.dll"
+Add-Type -Path "C:\Program Files\Common Files\Microsoft Shared\Web Server Extensions\15\ISAPI\Microsoft.SharePoint.Client.Runtime.dll"
+
+$enableDebug = $true
+
+#########################################################################################
+#                            General
+#########################################################################################
+function Connect {
+<#
+.SYNOPSIS
+Creates a client context for accessing a SP site. All other functions expect a
+proper Context object to execute successfully.
+
+.PARAMETER siteUrl
+The url of the SP site to connect. User executing the command must have proper rights.
+
+.PARAMETER user
+The user name (in e-amil format) for Office 365. Not used for on-premises installations.
+
+.OUTPUTS
+Microsoft.SharePoint.Client.ClientContext
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][string]$siteUrl, 
+        [Parameter(Mandatory=$false)][string]$user = $null
+        )
+
+    if ($user -ne $null -and $user -ne "") {
+        $password = Read-Host -Prompt "Please enter your password" -AsSecureString
+        $credentials = New-Object Microsoft.SharePoint.Client.SharePointOnlineCredentials($user,$password)
+    }
+
+    #Bind to site collection
+    $context = New-Object Microsoft.SharePoint.Client.ClientContext($siteUrl)
+
+    if ($user -ne $null -and $user -ne "") {
+        $context.Credentials = $credentials
+    }
+
+    #Retrieve lists
+    $lists = $context.Web.Lists
+    $context.Load($lists)
+    $context.ExecuteQuery()
+
+    Write-Host "Connected to $($siteUrl) `n`t Lists count: $($lists.Count)"
+    return $context
+}
+
+
+#########################################################################################
+#                            Lists
+#########################################################################################
+function Get-List {
+<#
+.SYNOPSIS
+
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER listTitle
+The title (name) of the list to search for.
+
+.OUTPUTS
+Microsoft.SharePoint.Client.List or $null (list not found)
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+$list = Get-List $context "Test List"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$listTitle
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+    
+    $collection = $context.Web.Lists
+    $context.Load($collection)
+    $context.ExecuteQuery()
+
+    $list = $null
+    $titles = $collection | select Title,ID
+    if($titles.Title -contains $listTitle) {
+
+        $id = $titles| Where-Object {$_.Title -eq $listTitle} | select ID
+        $guid = $id.ID.GUID
+        $list = $collection.GetByID($guid)
+        $context.Load($list)
+        $context.ExecuteQuery()
+    }
+    
+    return $list
+}
+
+function Add-List {
+<#
+.SYNOPSIS
+Add a new list instance to the site.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER listTitle
+The title (name) of the list to search for.
+
+.OUTPUTS
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+$list = Get-List $context "Test List"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$listTitle,
+        [Parameter(Mandatory=$true)][string]$listUrl,
+        [Parameter(Mandatory=$false)][string]$listDescription,
+        [Parameter(Mandatory=$false)][int]$templateType = 100,
+        [Parameter(Mandatory=$false)][Guid]$templateFeatureId,
+        [Parameter(Mandatory=$false)][int]$quickLaunchOptions = 1
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+    try {
+
+        $list = Get-List $context $listTitle -ErrorAction Stop
+        if ($list -eq $null) {
+            $listInfo = New-Object Microsoft.SharePoint.Client.ListCreationInformation
+            $listInfo.Title = $listTitle
+            $listInfo.TemplateType = $templateType
+            $listInfo.Url = $listUrl
+            $listInfo.Description = $listDescription
+            $listInfo.QuickLaunchOption = $quickLaunchOptions;
+
+            if ($templateFeatureId -ne [Guid].Empty) {
+                $listInfo.TemplateFeatureId = $templateFeatureId
+            }
+
+            $list = $context.Web.Lists.Add($listInfo)
+
+            $context.ExecuteQuery()
+
+            Write-Host -ForeGround 'Green' "List created: $($listTitle)"
+        }
+        else {
+            Write-Host -ForeGround 'Yellow' "List already exists: $($listTitle)"
+        }
+    } catch {
+        write-host "Caught an exception:" -ForegroundColor Red
+        write-host "Exception Type: $($_.Exception.GetType().FullName)" -ForegroundColor Red
+        write-host "Exception Message: $($_.Exception.Message)" -ForegroundColor Red
+        if ($enableDebug -eq $true) {
+            write-host "Exception Details: $($_.Exception.ToString())" -ForegroundColor Red
+        }
+    }
+}
+
+function Add-ListWithSchemaXml {
+<#
+.SYNOPSIS
+Add a new list instance in the site using the provided schema xml.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER listTitle
+The title (name) of the list to search for.
+
+.OUTPUTS
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+$list = Get-List $context "Test List"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$listTitle,
+        [Parameter(Mandatory=$true)][string]$schemaXml,
+        [Parameter(Mandatory=$true)][int]$templateType,
+        [Parameter(Mandatory=$false)][Guid]$templateFeatureId
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+
+    $list = Get-List $context $listTitle
+    if ($list -eq $null) {
+        $listInfo = New-Object Microsoft.SharePoint.Client.ListCreationInformation
+        $listInfo.Title = $listTitle
+        $listInfo.CustomSchemaXml = $schemaXml
+        $listInfo.TemplateType = $templateType
+        $listInfo.TemplateFeatureId = $templateFeatureId        
+        
+        $list = $context.Web.Lists.Add($listInfo)
+
+        $context.ExecuteQuery()
+
+        Write-Host -ForeGround 'Green' "List created: $($listTitle)"
+    }
+    else {
+        Write-Host -ForeGround 'Yellow' "List already exists: $($listTitle)"
+    }
+}
+
+function Recycle-List {
+<#
+.SYNOPSIS
+Send a list to recycle bin.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER listTitle
+The title (name) of the list to search for.
+
+.OUTPUTS
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+$list = Get-List $context "Test List"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$listTitle
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+    
+    $list = Get-List $context $listTitle;
+    if ($list -ne $null) {
+        $list.Recycle()
+        $context.ExecuteQuery()
+        Write-Host -ForeGround 'Green' "List deleted: $($listTitle)"
+    }
+    else {
+        Write-Host -ForeGround 'Yellow' "List does not exist: $($listTitle)"
+    }
+}
+
+function Enable-ListContentTypes {
+<#
+.SYNOPSIS
+
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER listTitle
+The title (name) of the list to search for.
+
+.OUTPUTS
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+$list = Get-List $context "Test List"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$listTitle
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+    
+    $list = Get-List $context $listTitle;
+    if ($list -ne $null) {
+        if ($list.ContentTypesEnabled -eq $false) {
+            $list.ContentTypesEnabled = $true
+            $list.Update()
+            $context.ExecuteQuery()
+            Write-Host -ForeGround 'Green' "Enabled List Content Types: $($listTitle)"
+        }
+    }
+    else {
+        Write-Host -ForeGround 'Yellow' "List does not exist: $($listTitle)"
+    }
+}
+
+#########################################################################################
+#                            Fields
+#########################################################################################
+function Get-Field {
+<#
+.SYNOPSIS
+
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER listTitle
+The title (name) of the list to search for.
+
+.OUTPUTS
+Microsoft.SharePoint.Client.Field or $null (field not found)
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+$list = Get-List $context "Test List"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$fieldName
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+    
+    $collection = $context.Web.Fields
+    $context.Load($collection)
+    $context.ExecuteQuery()
+    
+    $field = $null
+    $titles = $collection | select Title, InternalName, Id
+    #Write-Host $titles
+
+    if($titles.InternalName -contains $fieldName) {
+
+        $id = $titles| Where-Object {$_.InternalName -eq $fieldName} | select Id
+
+        $guid = $id.Id.GUID
+        $field = $collection.GetByID($guid)
+        $context.Load($field)
+        $context.ExecuteQuery()
+    }
+
+    return $field
+}
+
+function Add-FieldWithSchemaXml {
+<#
+.SYNOPSIS
+Add a new field in site collection columns using the provided schema xml.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER fieldName
+The name of the field to add.
+
+.PARAMETER schemaXml
+The schema xml text that describes the new field.
+
+.OUTPUTS
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+$schemaXml = Get-Content ".\FieldSchema.xml"
+Add-FieldWithSchemaXml -context $context -fieldName "TestField1" -schemaXml $schemaXml
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+Add-FieldWithSchemaXml -context $context -fieldName "TestField1" -schemaXml '<Field ID="{7E9D7B72-80CB-48DE-0000-00007A8B22D6}" Type="Text" StaticName="TestField1" DisplayName="Test Field 1" Required="TRUE" Group="Test Fields" Name="TestField1" ></Field>'
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$fieldName,
+        [Parameter(Mandatory=$true)][string]$schemaXml
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+
+    $field = Get-Field $context $fieldName
+    if ($field -eq $null) {
+        $field = $context.Web.Fields.AddFieldAsXml($schemaXml, $false, 0)
+
+        $context.ExecuteQuery()
+
+        Write-Host -ForeGround 'Green' "Field created: $($fieldName)"
+    }
+    else {
+        Write-Host -ForeGround 'Yellow' "Field already exists: $($fieldName)"
+    }
+}
+
+function Add-FieldText {
+<#
+.SYNOPSIS
+Add a new text field in site collection columns.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER fieldName
+The name of the field to add.
+
+.PARAMETER schemaXml
+The schema xml text that describes the new field.
+
+.OUTPUTS
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+Add-FieldText -context $context -fieldName "TestField1" -displayName "Test Field 1" -groupName "Test Fields"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$fieldName,
+        [Parameter(Mandatory=$true)][string]$displayName,
+        [Parameter(Mandatory=$false)][string]$groupName,
+        [Parameter(Mandatory=$false)][int]$maxNumberOfChars = 255,
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$required = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$enforceUniqueValues = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$indexed = "FALSE",
+        [Parameter(Mandatory=$false)][string]$defaultValue
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+
+    $defaultValueText = "/>"
+    if ($defaultValue) {
+        $defaultValueText = "<Default>$defaultValue</Default></Field>"
+    }
+    if(!$maxNumberOfChars)
+    {
+        $maxNumberOfChars = 255
+    }
+    $schemaXml = "<Field Type='Text' DisplayName='$displayName' StaticName='$fieldName' Name='$fieldName' MaxLength='$maxNumberOfChars' Group='$groupName' Required='$required' EnforceUniqueValues='$enforceUniqueValues' Indexed='$indexed' $defaultValueText"
+    Add-FieldWithSchemaXml $context $fieldName $schemaXml 
+}
+
+function Add-FieldNote {
+<#
+.SYNOPSIS
+Add a new note field in site collection columns.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER fieldName
+The name of the field to add.
+
+.PARAMETER schemaXml
+The schema xml text that describes the new field.
+
+.OUTPUTS
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+Add-FieldText -context $context -fieldName "TestField1" -displayName "Test Field 1" -groupName "Test Fields"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$fieldName,
+        [Parameter(Mandatory=$true)][string]$displayName,
+        [Parameter(Mandatory=$false)][string]$groupName,
+        [Parameter(Mandatory=$false)][int]$numberOfLines = 10,
+        [Parameter(Mandatory=$false)][ValidateSet("RichText","EnhancedRichText","PlainText")][string]$textType = "PlainText",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$required = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$enforceUniqueValues = "FALSE",
+        [Parameter(Mandatory=$false)][string]$defaultValue
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+
+    $defaultValueText = "/>"
+    if ($defaultValue) {
+        $defaultValueText = "<Default>$defaultValue</Default></Field>"
+    }
+    if($textType -eq "RichText")
+    {
+        $text_type = 'RichText="TRUE" RichTextMode="Compatible"'
+    }
+    elseif($textType -eq "EnhancedRichText")
+    {
+        $text_type = 'RichText="TRUE" RichTextMode="FullHtml"'
+    }
+    Elseif($textType -eq "PlainText")
+    {
+        $text_type = 'RichText="False"'
+    }
+
+    $schemaXml = "<Field Type='Note' DisplayName='$displayName' StaticName='$fieldName' Name='$fieldName' NumLines='$numberOfLines' $text_type Sortable='FALSE' Group='$groupName' Required='$required' EnforceUniqueValues='$enforceUniqueValues' $defaultValueText"
+    Add-FieldWithSchemaXml $context $fieldName $schemaXml 
+}
+
+function Add-FieldDateTime {
+<#
+.SYNOPSIS
+Add a new datetime field in site collection columns.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER fieldName
+The name of the field to add.
+
+.PARAMETER schemaXml
+The schema xml text that describes the new field.
+
+.OUTPUTS
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+Add-FieldText -context $context -fieldName "TestField1" -displayName "Test Field 1" -groupName "Test Fields"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$fieldName,
+        [Parameter(Mandatory=$true)][string]$displayName,
+        [Parameter(Mandatory=$false)][string]$groupName,
+        [Parameter(Mandatory=$false)][ValidateSet("DateOnly","DateTime")][string]$format = "DateOnly",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$required = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$enforceUniqueValues = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$indexed = "FALSE",
+        [Parameter(Mandatory=$false)][string]$defaultValue
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+
+    $defaultValueText = "/>"
+    if ($defaultValue) {
+        $defaultValueText = "<Default>$defaultValue</Default></Field>"
+    }
+    $schemaXml = "<Field Type='DateTime' DisplayName='$displayName' StaticName='$fieldName' Name='$fieldName' Group='$groupName' Format='$format' Required='$required' EnforceUniqueValues='$enforceUniqueValues' Indexed='$indexed' $defaultValueText"
+    Add-FieldWithSchemaXml $context $fieldName $schemaXml 
+}
+
+function Add-FieldNumber {
+<#
+.SYNOPSIS
+Add a new number field in site collection columns.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER fieldName
+The name of the field to add.
+
+.PARAMETER schemaXml
+The schema xml text that describes the new field.
+
+.OUTPUTS
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+Add-FieldText -context $context -fieldName "TestField1" -displayName "Test Field 1" -groupName "Test Fields"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$fieldName,
+        [Parameter(Mandatory=$true)][string]$displayName,
+        [Parameter(Mandatory=$false)][string]$groupName,
+        [Parameter(Mandatory=$false)][ValidateSet("Integer","Number")][string]$format = "Number",
+        [Parameter(Mandatory=$false)][int]$decimals = 0,
+        [Parameter(Mandatory=$false)][int]$min,
+        [Parameter(Mandatory=$false)][int]$max,
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$percentage = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$required = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$enforceUniqueValues = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$indexed = "FALSE",
+        [Parameter(Mandatory=$false)][string]$defaultValue
+        )
+        #Decimals, Div, Max, Min, Mult, and Percentage.
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+
+    $defaultValueText = "/>"
+    if ($defaultValue) {
+        $defaultValueText = "<Default>$defaultValue</Default></Field>"
+    }
+    if ($max) {
+        $max_text = "Max='$max'"
+    }
+    if ($min) {
+        $min_text = "Min='$min'"
+    }
+    $schemaXml = "<Field Type='$format' DisplayName='$displayName' StaticName='$fieldName' Name='$fieldName' Group='$groupName' Decimals='$decimals' $max_text $min_text Percentage='$percentage' Required='$required' EnforceUniqueValues='$enforceUniqueValues' Indexed='$indexed' $defaultValueText"
+    Add-FieldWithSchemaXml $context $fieldName $schemaXml 
+}
+
+function Add-FieldBoolean {
+<#
+.SYNOPSIS
+Add a new boolean (yes / no) field in site collection columns.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER fieldName
+The name of the field to add.
+
+.PARAMETER schemaXml
+The schema xml text that describes the new field.
+
+.OUTPUTS
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+Add-FieldText -context $context -fieldName "TestField1" -displayName "Test Field 1" -groupName "Test Fields"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$fieldName,
+        [Parameter(Mandatory=$true)][string]$displayName,
+        [Parameter(Mandatory=$false)][string]$groupName,
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$required = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$indexed = "FALSE",
+        [Parameter(Mandatory=$false)][string]$defaultValue
+        )
+        #Decimals, Div, Max, Min, Mult, and Percentage.
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+
+    $defaultValueText = "/>"
+    if ($defaultValue) {
+        $defaultValueText = "<Default>$defaultValue</Default></Field>"
+    }
+    $schemaXml = "<Field Type='Boolean' DisplayName='$displayName' StaticName='$fieldName' Name='$fieldName' Group='$groupName' Required='$required' Indexed='$indexed' $defaultValueText"
+    Add-FieldWithSchemaXml $context $fieldName $schemaXml 
+}
+
+function Add-FieldChoice {
+<#
+.SYNOPSIS
+Add a new choice field in site collection columns.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER fieldName
+The name of the field to add.
+
+.PARAMETER schemaXml
+The schema xml text that describes the new field.
+
+.OUTPUTS
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+Add-FieldText -context $context -fieldName "TestField1" -displayName "Test Field 1" -groupName "Test Fields"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$fieldName,
+        [Parameter(Mandatory=$true)][string]$displayName,
+        [Parameter(Mandatory=$false)][string]$groupName,
+        [Parameter(Mandatory=$true)][string]$choiceValues,
+        [Parameter(Mandatory=$false)][string]$choiceValueDelimiter = ";",
+        [Parameter(Mandatory=$false)][ValidateSet("Dropdown","MultiChoice","RadioButtons")][string]$format = "Dropdown",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$allowFillInChoices = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$required = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$enforceUniqueValues = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$indexed = "FALSE",
+        [Parameter(Mandatory=$false)][string]$defaultValue
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+
+    $defaultValueText = ""
+    if ($defaultValue) {
+        $defaultValueText = "<Default>$defaultValue</Default>"
+    }
+    if($format -eq "MultiChoice") {
+        $fieldType = "MultiChoice"
+        $choiceType = $null
+    }
+    else {
+        $fieldType = "Choice"
+        $choiceType = $format
+    }
+    $options = ""
+    $arr = $choiceValues.Split($choiceValueDelimiter)
+    foreach ($v in $arr)
+    {
+        $options = $options + "<CHOICE>$v</CHOICE>"
+    }
+    $schemaXml = "<Field Type='$fieldType' DisplayName='$displayName' StaticName='$fieldName' Name='$fieldName' Group='$groupName' Format='$choiceType' FillInChoice='$allowFillInChoices' Required='$required' EnforceUniqueValues='$enforceUniqueValues' Indexed='$indexed' ><CHOICES>$options</CHOICES>$defaultValueText</Field>"
+    Add-FieldWithSchemaXml $context $fieldName $schemaXml 
+}
+
+function Add-FieldUser {
+<#
+.SYNOPSIS
+Add a new user field in site collection columns.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER fieldName
+The name of the field to add.
+
+.PARAMETER schemaXml
+The schema xml text that describes the new field.
+
+.OUTPUTS
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+Add-FieldText -context $context -fieldName "TestField1" -displayName "Test Field 1" -groupName "Test Fields"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$fieldName,
+        [Parameter(Mandatory=$true)][string]$displayName,
+        [Parameter(Mandatory=$false)][string]$groupName,
+        [Parameter(Mandatory=$false)][ValidateSet("Single","Multi")][string]$format = "Single",
+        [Parameter(Mandatory=$false)][string]$userSelectionScope = "0",
+        [Parameter(Mandatory=$false)][ValidateSet("PeopleOnly","PeopleAndGroups")][string]$userSelectionMode = "PeopleOnly",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$required = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$enforceUniqueValues = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$indexed = "FALSE"
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+
+    if($format -eq "Single") {
+        $fieldType = "User"
+        $mult = $null
+    }
+    else {
+        $fieldType = "UserMulti"
+        $mult = "Mult='TRUE'"
+        $indexed = "FALSE"
+        #Write-host "Indexing on Multi User Fields isn't supported"
+    }
+    
+    # UserSelectionScope: 0 for all, Group Id otherwise
+
+    $schemaXml = "<Field Type='$fieldType' DisplayName='$displayName' StaticName='$fieldName' Name='$fieldName' Group='$groupName' UserSelectionScope='$userSelectionScope' UserSelectionMode='$userSelectionMode' $mult Required='$required' EnforceUniqueValues='$enforceUniqueValues' Indexed='$indexed' />"
+    Add-FieldWithSchemaXml $context $fieldName $schemaXml 
+}
+
+function Add-FieldLookup {
+<#
+.SYNOPSIS
+Add a new lookup field in site collection columns.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER fieldName
+The name of the field to add.
+
+.PARAMETER schemaXml
+The schema xml text that describes the new field.
+
+.OUTPUTS
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+Add-FieldText -context $context -fieldName "TestField1" -displayName "Test Field 1" -groupName "Test Fields"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$fieldName,
+        [Parameter(Mandatory=$true)][string]$displayName,
+        [Parameter(Mandatory=$false)][string]$groupName,
+        [Parameter(Mandatory=$false)][ValidateSet("Single","Multi")][string]$format = "Single",
+        [Parameter(Mandatory=$true)][string]$lookupListName,
+        [Parameter(Mandatory=$false)][string]$showField = "Title",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$required = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$enforceUniqueValues = "FALSE",
+        [Parameter(Mandatory=$false)][ValidateSet("TRUE","FALSE")][string]$indexed = "FALSE"
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+
+    if($format -eq "Single") {
+        $fieldType = "Lookup"
+        $mult = ""
+    }
+    else {
+        $fieldType = "LookupMulti"
+        $mult = "Mult='TRUE'"
+    }
+    
+    $list = Get-List $context $lookupListName
+    if ($list -eq $null) {
+        Write-host -ForeGround 'Yellow' "List '$lookupListName' does not exist"
+        return
+    }
+    $listId = $list.ID
+
+    $schemaXml = "<Field Type='$fieldType' DisplayName='$displayName' StaticName='$fieldName' Name='$fieldName' Group='$groupName' List='$listId' ShowField='$showField' $mult Required='$required' EnforceUniqueValues='$enforceUniqueValues' Indexed='$indexed' />"
+    Add-FieldWithSchemaXml $context $fieldName $schemaXml 
+}
+
+
+
+#########################################################################################
+#                           Content Types
+#########################################################################################
+function Get-ContentType {
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$contentTypeName
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+    
+    $collection = $context.Web.ContentTypes
+    $context.Load($collection)
+    $context.ExecuteQuery()
+    
+    $ct = $null
+    $titles = $collection | select Name, ID
+
+    if($titles.Name -contains $contentTypeName) {
+
+        $id = $titles| Where-Object {$_.Name -eq $contentTypeName} | select Id
+
+        $ct = $collection.GetByID($id.Id.ToString())
+        $context.Load($ct)
+        $context.ExecuteQuery()
+    }
+
+    return $ct
+}
+
+function Get-ListContentType {
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$contentTypeName,
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.List]$list 
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+    
+    $collection = $list.ContentTypes
+    $context.Load($collection)
+    $context.ExecuteQuery()
+    
+    $ct = $null
+    $titles = $collection | select Name, ID
+
+    if($titles.Name -contains $contentTypeName) {
+
+        $id = $titles| Where-Object {$_.Name -eq $contentTypeName} | select Id
+
+        $ct = $collection.GetByID($id.Id.ToString())
+        $context.Load($ct)
+        $context.ExecuteQuery()
+    }
+
+    return $ct
+}
+
+function Add-ContentType {
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$contentTypeName,
+        [Parameter(Mandatory=$false)][string]$contentTypeId,
+        [Parameter(Mandatory=$false)][string]$parentContentTypeId,
+        [Parameter(Mandatory=$false)][string]$description,
+        [Parameter(Mandatory=$false)][string]$groupName
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+    
+    $ct = Get-ContentType $context $contentTypeName
+
+    if ($ct -eq $null) {
+        $collection = $context.Web.ContentTypes
+        $context.Load($collection)
+        $context.ExecuteQuery()
+    
+        $ctInfo = New-Object Microsoft.SharePoint.Client.ContentTypeCreationInformation
+
+        if (!$contentTypeId) {
+            #$ct.Id = [System.Guid]::NewGuid().ToString("N").ToUpper()
+            $ctParent = $collection.GetByID($parentContentTypeId)
+            $context.Load($ctParent)
+            $context.ExecuteQuery()
+
+            $ctInfo.ParentContentType = $ctParent
+        }
+        else {
+            $ctInfo.Id = $contentTypeId
+        }
+        $ctInfo.Description = $description
+        $ctInfo.Name = $contentTypeName
+        $ctInfo.Group = $groupName
+
+        $ctNew = $collection.Add($ctInfo) 
+        $context.ExecuteQuery()
+
+        Write-Host -ForeGround 'Green' "Content Type created: $($contentTypeName)"
+    }
+    else {
+        Write-Host -ForeGround 'Yellow' "Content Type already exists: $($contentTypeName)"
+    }
+}
+
+function Add-ContentTypeToList {
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$contentTypeName,
+        [Parameter(Mandatory=$true)][string]$listName
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+    
+    $list = Get-List $context $listName
+    if ($list -eq $null) {
+        Write-Host -ForeGround 'Red' "List does not exist: $($listTitle)"
+        return 
+    }
+    $ct = Get-ContentType $context $contentTypeName
+
+    $ctNew = Get-ListContentType $context $contentTypeName $list
+
+    if ($ctNew -eq $null) {
+        Enable-ListContentTypes $context $listName
+
+        $listCTs = $list.ContentTypes
+        $context.Load($listCTs)
+        $context.ExecuteQuery()
+
+        $ctNew = $listCTs.AddExistingContentType($ct)
+        $context.Load($ctNew)
+        $context.ExecuteQuery()
+
+        Write-Host -ForeGround 'Green' "Content Type added to list: $($contentTypeName)"
+    }
+    else {
+        Write-Host -ForeGround 'Yellow' "Content Type already exists in list: $($contentTypeName)"
+    }
+}
+
+
+
+function Get-ContentTypeFieldLink {
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][Guid]$fieldId,
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ContentType]$contentType 
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+    
+    $collection = $contentType.FieldLinks
+    $context.Load($collection)
+    $context.ExecuteQuery()
+    
+    $fieldLink = $collection.GetById($fieldId)
+    $context.Load($fieldLink)
+    $context.ExecuteQuery()
+    
+    if (!$fieldLink.Id) {
+        $fieldLink = $null
+    }
+
+    return $fieldLink
+}
+
+function Add-FieldToContentType {
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$fieldName,
+        [Parameter(Mandatory=$true)][string]$contentTypeName
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+    
+    $field = Get-Field $context $fieldName
+    $ct = Get-ContentType $context $contentTypeName
+
+    $fieldLink = Get-ContentTypeFieldLink $context $field.Id $ct
+
+    if ($fieldLink -eq $null) {
+        $fieldLinkInfo = New-Object Microsoft.SharePoint.Client.FieldLinkCreationInformation
+
+        $fieldLinkInfo.Field = $field
+
+        $collection = $ct.FieldLinks
+        $context.Load($collection)
+        $context.ExecuteQuery()
+
+        $fieldLink = $collection.Add($fieldLinkInfo)
+        $context.Load($fieldLink)
+        $ct.Update($true)
+        $context.ExecuteQuery()
+
+        Write-Host -ForeGround 'Green' "Field added to content type: $($fieldName)"
+    }
+    else {
+        Write-Host -ForeGround 'Yellow' "Field already exists in content type: $($fieldName)"
+    }
+}
+
+
+
+#########################################################################################
+#                           Views
+#########################################################################################
+function Get-View {
+<#
+.SYNOPSIS
+Get the view with the specified name in the specified list.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER listName
+The title (name) of the parent list of view.
+
+.PARAMETER viewName
+The title (name) of the view to search for.
+
+.OUTPUTS
+Microsoft.SharePoint.Client.View or $null (view not found)
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+$view = Get-View -context $context -listName "Test List" -viewName "My View"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$listName,
+        [Parameter(Mandatory=$true)][string]$viewName
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+
+    $list = Get-List $context $listName
+
+    if ($list -ne $null) {
+        $collection = $list.Views
+        $context.Load($collection)
+        $context.ExecuteQuery()
+    
+        $view = $null
+        $titles = $collection | select Title,ID
+        if($titles.Title -contains $viewName) {
+            $view = $collection.GetByTitle($viewName)
+            $context.Load($view)
+            $context.ExecuteQuery()
+        }
+            
+        return $view
+    }
+    else {
+        return $null
+    }
+}
+
+<#
+.SYNOPSIS
+Add a new view in the specified list.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER viewTitle
+The title (name) of the parent list of view.
+
+.PARAMETER viewQuery
+The CAML query of the view. The query defines the order by clause and the criteria (where clause).
+
+.PARAMETER viewFields
+A delimited string defining the fields to show in view.
+
+.PARAMETER viewFieldsDelimiter
+The delimiter character used in viewFields parameter.
+
+.PARAMETER aggregations
+Fields aggregations. Allowed types:
+  SUM, 
+  COUNT, 
+  AVG, 
+  MAX, 
+  MIN, 
+  STDEV (standard deviation),
+  VAR (variance)
+
+.PARAMETER rowLimit
+The limit of items to return (per page) when executing the view.
+
+.OUTPUTS
+
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+Add-View -context $context -listName "Test List" -viewTitle "My View 1" -viewQuery '<OrderBy><FieldRef Name="Title" /></OrderBy><Where><Eq><FieldRef Name="Title" /><Value Type="Text">hello</Value></Eq></Where>' -viewFields "Title;Author;Modified" -aggregations '<FieldRef Name="Author" Type="COUNT" />'
+
+.LINK
+
+#>
+function Add-View {
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$listName,
+        [Parameter(Mandatory=$true)][string]$viewTitle,
+        [Parameter(Mandatory=$true)][string]$viewQuery,
+        [Parameter(Mandatory=$true)][string]$viewFields,
+        [Parameter(Mandatory=$false)][string]$viewFieldsDelimiter = ";",
+        [Parameter(Mandatory=$false)][string]$aggregations = $null,
+        [Parameter(Mandatory=$false)][int]$rowLimit = 50
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+
+    $list = Get-List $context $listName
+
+    if ($list -eq $null) {
+        Write-Host -ForeGround 'Red' "List does not exist: $($listName)"
+        return 
+    }
+
+    $viewTemp = Get-View $context $listName $viewTitle
+    $view = [Microsoft.SharePoint.Client.View]$viewTemp
+
+    if ($view -eq $null) {
+        $viewInfo = New-Object Microsoft.SharePoint.Client.ViewCreationInformation
+        $viewInfo.Title = $viewTitle
+
+        #$viewQuery = '<OrderBy><FieldRef Name="Title" /></OrderBy><Where><Eq><FieldRef Name="IsActive" /><Value Type="Boolean">1</Value></Eq></Where>'
+        $viewInfo.Query = $viewQuery
+        $viewInfo.RowLimit = $rowLimit
+
+        $fields = New-Object System.Collections.Specialized.StringCollection
+        $arr = $viewFields.Split($viewFieldsDelimiter)
+        foreach ($v in $arr)
+        {
+            [void]$fields.Add($v)
+        }
+
+        $viewInfo.ViewFields = $fields
+
+        $view = $list.Views.Add($viewInfo)
+        $list.Update()
+        $context.Load($view)
+        $context.ExecuteQuery()
+
+        if ($aggregations -ne $null -and $aggregations -ne "") {
+            $view.Aggregations = $aggregations
+            $view.AggregationsStatus = "On";
+            $view.Update()
+            $context.ExecuteQuery()
+        }
+        
+        Write-Host -ForeGround 'Green' "View created: $($viewTitle)"
+    }
+    else {
+        Write-Host -ForeGround 'Yellow' "View already exists: $($viewTitle)"
+    }
+}
+
+<#
+.SYNOPSIS
+Update an existing view in the specified list.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER listName
+The title (name) of the parent list of view.
+
+.PARAMETER viewName
+The title (name) of the view to search for.
+
+.PARAMETER viewTitle
+The title (name) of the parent list of view.
+
+.PARAMETER viewQuery
+The CAML query of the view. The query defines the order by clause and the criteria (where clause).
+
+.PARAMETER viewFields
+A delimited string defining the fields to show in view. To change the field ordering, 
+use also the viewFieldsRemoveAll parameter ()set to $true.
+
+.PARAMETER viewFieldsDelimiter
+The delimiter character used in viewFields parameter.
+
+.PARAMETER viewFieldsRemoveAll
+If $true, removes all view fields before adding the fiels defined in viewFields parameter.
+
+.PARAMETER aggregations
+Fields aggregations. Allowed types:
+  SUM, 
+  COUNT, 
+  AVG, 
+  MAX, 
+  MIN, 
+  STDEV (standard deviation),
+  VAR (variance)
+
+.PARAMETER rowLimit
+The limit of items to return (per page) when executing the view.
+
+.OUTPUTS
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+Update-View -context $context -listName "Test List" -viewName "My View 1" -viewTitle "My View 1" -viewQuery '<OrderBy><FieldRef Name="Title" /></OrderBy><Where><Eq><FieldRef Name="Title" /><Value Type="Text">hello 2</Value></Eq></Where>' -viewFields "Title;Created;Author" -viewFieldsRemoveAll $true -aggregations '<FieldRef Name="Title" Type="COUNT" />'
+
+.LINK
+
+#>
+function Update-View {
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$listName,
+        [Parameter(Mandatory=$true)][string]$viewName,
+        [Parameter(Mandatory=$false)][string]$viewTitle = $null,
+        [Parameter(Mandatory=$false)][string]$viewQuery = $null,
+        [Parameter(Mandatory=$false)][string]$viewFields = $null,
+        [Parameter(Mandatory=$false)][string]$viewFieldsDelimiter = ";",
+        [Parameter(Mandatory=$false)][bool]$viewFieldsRemoveAll = $false,
+        [Parameter(Mandatory=$false)][string]$aggregations = $null,
+        [Parameter(Mandatory=$false)][int]$rowLimit = 50
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+
+    $list = Get-List $context $listName
+
+    if ($list -eq $null) {
+        Write-Host -ForeGround 'Red' "List does not exist: $($listName)"
+        return 
+    }
+
+    $viewTemp = Get-View $context $listName $viewName
+    $view = [Microsoft.SharePoint.Client.View]$viewTemp
+
+    if ($view -ne $null) {
+        $doUpdate = $false
+
+        if ($viewTitle -ne $null -and $view.Title.Equals($viewTitle) -eq $false) {
+            Write-Host "Update View Title:`n`tOld value: $($view.Title)`n`tNew value: $viewTitle"
+            $view.Title = $viewTitle
+            $doUpdate = $true
+        }
+
+        if ($viewQuery -ne $null -and $view.ViewQuery.Equals($viewQuery) -eq $false) {
+            Write-Host "Update View Query:`n`tOld value: $($view.ViewQuery)`n`tNew value: $viewQuery"
+            $view.ViewQuery = $viewQuery
+            $doUpdate = $true
+        }
+        
+        if ($view.RowLimit -ne $rowLimit) {
+            $view.RowLimit = $rowLimit
+            $doUpdate = $true
+        }
+
+        if ($viewFields -ne $null) {
+            $viewFieldsCurrent = $view.ViewFields
+            $context.Load($viewFieldsCurrent)
+            $context.ExecuteQuery()
+
+            $fields = New-Object System.Collections.Specialized.StringCollection
+            $fieldsToAdd = New-Object System.Collections.Specialized.StringCollection
+            $fieldsToRemove = New-Object System.Collections.Specialized.StringCollection
+            $arr = $viewFields.Split($viewFieldsDelimiter)
+            foreach ($v in $arr)
+            {
+                [void]$fields.Add($v)
+           
+                $tmpField = $viewFieldsCurrent | Where-Object {$_ -eq $v}
+                if ($tmpField -eq "" -or $tmpField -eq $null) {
+                    [void]$fieldsToAdd.Add($v)
+                    $doUpdate = $true
+                    Write-Host "Added View Field: $v"
+                }
+            }
+
+            if ($viewFieldsRemoveAll -eq $true) {
+                $view.ViewFields.RemoveAll()
+                foreach ($v in $fields) {
+                    $viewFieldsCurrent.Add($v)
+                }
+            }
+            else {
+                foreach ($v in $viewFieldsCurrent) {
+                    $tmpField = $fields | Where-Object {$_ -eq $v}
+                    if ($tmpField -eq "" -or $tmpField -eq $null) {
+                        [void]$fieldsToRemove.Add($v)
+                        $doUpdate = $true
+                        Write-Host "Deleted View Field: $v"
+                    }
+                }
+
+                foreach ($v in $fieldsToRemove) {
+                    $viewFieldsCurrent.Remove($v)
+                }
+                foreach ($v in $fieldsToAdd) {
+                    $viewFieldsCurrent.Add($v)
+                }
+            }
+        }
+
+        # Always update aggregations, after setting ViewFields property
+        if ($aggregations -ne $null -and ($view.Aggregations -eq $null -or $view.Aggregations.Equals($aggregations) -eq $false)) {
+            Write-Host "Update Aggregations:`n`tOld value: $($view.Aggregations)`n`tNew value: $aggregations"
+            $view.Aggregations = $aggregations
+            if ($aggregations -eq "") {
+                $view.AggregationsStatus = "Off";
+            }
+            else {
+                $view.AggregationsStatus = "On";
+            }
+            $doUpdate = $true
+        }
+
+
+        if ($doUpdate -eq $true) {
+            $view.Update()
+            $context.ExecuteQuery()
+        
+            Write-Host -ForeGround 'Green' "View updated: $($viewTitle)"
+        }
+        else {
+            Write-Host -ForeGround 'Yellow' "View has not changed: $($viewTitle)"
+        }
+    }
+    else {
+        Write-Host -ForeGround 'Yellow' "View does not exist: $($viewTitle)"
+    }
+}
+
+function Get-ViewQuery {
+<#
+.SYNOPSIS
+Get the query used in view with the specified name in the specified list.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER listName
+The title (name) of the parent list of view.
+
+.PARAMETER viewName
+The title (name) of the view to search for.
+
+.OUTPUTS
+string
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+$viewQuery = Get-ViewQuery -context $context -listName "Test List" -viewName "My View 1"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$listName,
+        [Parameter(Mandatory=$true)][string]$viewName
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+
+    $list = Get-List $context $listName
+
+    if ($list -eq $null) {
+        Write-Host -ForeGround 'Red' "List does not exist: $($listName)"
+        return 
+    }
+
+    $viewTemp = Get-View $context $listName $viewName
+    $view = [Microsoft.SharePoint.Client.View]$viewTemp
+
+    if ($view -ne $null) {
+        Write-Host -ForeGround 'Green' "View Query:`n`t$($view.ViewQuery)"
+    }
+    else {
+        Write-Host -ForeGround 'Yellow' "View does not exist: $($viewName)"
+    }
+}
+
+function Delete-View {
+<#
+.SYNOPSIS
+Delete the view with the specified name in the specified list.
+
+.PARAMETER context
+The client context object that is already connected to a SharePoint site.
+
+.PARAMETER listName
+The title (name) of the parent list of view.
+
+.PARAMETER viewName
+The title (name) of the view to search for.
+
+.OUTPUTS
+
+.EXAMPLE
+$context = Connect "http://sp2013"
+$viewQuery = Delete-View -context $context -listName "Test List" -viewName "My View 1"
+
+.LINK
+
+#>
+    [CmdletBinding()] param (
+        [Parameter(Mandatory=$true)][Microsoft.SharePoint.Client.ClientContext]$context, 
+        [Parameter(Mandatory=$true)][string]$listName,
+        [Parameter(Mandatory=$true)][string]$viewName
+        )
+
+    if ($context -eq $null) {
+        Write-Host -ForeGround 'Red' "Context argument is null"
+        return
+    }
+
+    $list = Get-List $context $listName
+
+    if ($list -eq $null) {
+        Write-Host -ForeGround 'Red' "List does not exist: $($listName)"
+        return 
+    }
+
+    $viewTemp = Get-View $context $listName $viewName
+    $view = [Microsoft.SharePoint.Client.View]$viewTemp
+
+    if ($view -ne $null) {
+        $view.DeleteObject()
+        $context.ExecuteQuery()
+  
+        Write-Host -ForeGround 'Green' "View deleted: $($viewName)"
+    }
+    else {
+        Write-Host -ForeGround 'Yellow' "View does not exist: $($viewName)"
+    }
+}
