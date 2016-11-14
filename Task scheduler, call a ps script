@@ -1,0 +1,3 @@
+Action: Start a program
+
+e.g. powershell -file "C:\Temp\test.ps1"
