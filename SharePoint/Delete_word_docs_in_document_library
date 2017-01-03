@@ -1,0 +1,34 @@
+#https://www.habaneroconsulting.com/insights/delete-sharepoint-files-with-powershell#.WGteVtKLTcs
+
+if ((Get-PSSnapin "Microsoft.SharePoint.PowerShell" -ErrorAction SilentlyContinue) -eq $null) {
+    Add-PSSnapin "Microsoft.SharePoint.PowerShell"
+}
+
+Write-Host "Start of process"
+
+$web = Get-SPWeb -identity "http://xxxx/sites/Lab/"
+$library = $web.Lists | where {$_.BaseType -eq "DocumentLibrary" -And $_.Title -eq "ToyLibrary" }
+
+Write-Host "Getting files from " $library.Title
+
+$docFiles = $library.Items | where {$_.FileSystemObjectType -eq "File" -And ($_.File -Like "*.docx" -Or $_.File -Like "*.docm" -Or $_.File -Like "*.doc")}
+
+try
+{
+    $i = 0
+    foreach ($file in $docFiles) {
+        Write-Output "Deleting file $($file.Name)..."
+        $file.Delete()
+        $i = $i + 1
+    }
+
+    Write-Host "Διαγράφηκαν $($i) αρχεία" 
+}
+catch [Exception]
+{
+   [string]::Format("Λάθος κατά την διαγραφή ", $_.Exception.Message)
+}
+
+Write-Host "End of process"
+
+
